@@ -1,0 +1,73 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# Build output
+frontend/.next/
+frontend/out/
+frontend/build/
+backend/dist/
+backend/build/
+dist/
+build/
+
+# TypeScript
+*.tsbuildinfo
+frontend/next-env.d.ts
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+frontend/.env*
+!frontend/.env.example
+backend/.env*
+!backend/.env.example
+
+# Testing
+coverage/
+.nyc_output/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Temporary files
+.temp/
+.tmp/
+*.pid
+*.pid.lock
+*.seed
+
+# Next.js and deployment
+.vercel/
+
+# Editors and IDEs
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.sublime-workspace
+.settings/
+*.launch
+
+# Operating system
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Certificates and private keys
+*.pem
