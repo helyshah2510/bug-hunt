@@ -1,6 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { resolve } from 'path';
+
+type RunnerResult = {
+    outcome: 'success' | 'timeout' | 'memory' | 'error';
+    output: string | null;
+    error: string | null;
+    timeMs: number | null;
+    memoryKb: number | null;
+};
 
 @Injectable()
 export class RunnerService {
@@ -55,10 +62,48 @@ export class RunnerService {
             const result = await resultResponse.json();
 
             if (result.status.id > 2) {
-                return result;
+                return this.normalizeResult(result);
             }
         }
 
         throw new Error('Timed out while waiting for the Judge0 result');
+    }
+
+    private normalizeResult(result: any): RunnerResult {
+        const statusId = result.status?.id;
+        const description = result.status?.description ?? '';
+
+        let outcome: RunnerResult['outcome'];
+
+        if (statusId === 3) {
+            outcome = 'success';
+        }
+        else if (statusId === 5) {
+            outcome = 'timeout';
+        }
+        else if (/memory limit|out of memory|memory exceeded/i.test(
+            `${description} ${result.message ?? ''}${result.stderr ?? ''}`,
+        ) ||
+            (result.memory != null && Number(result.memory) >= 128000)
+        ) {
+            outcome = 'memory';
+        } else {
+            outcome = 'error';
+        }
+
+        return {
+            outcome,
+            output: result.stdout ?? null,
+            error:
+                outcome === 'error' || outcome === 'memory'
+                    ? result.stderr || result.message || description || 'Execution failed'
+                    : outcome === 'timeout'
+                        ? description || 'execution timed out'
+                        : null,
+            timeMs:
+                result.time == null ? null : Math.round(Number(result.time) * 1000),
+            memoryKb:
+                result.memory == null ? null : Number(result.memory),
+        };
     }
 }
