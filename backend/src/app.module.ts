@@ -3,6 +3,7 @@ import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { ConfigModule } from '@nestjs/config';
 import { RunnerModule } from './runner/runner.module.js';
+import { ChallengesModule } from './challenges/challenges.module.js';
 
 @Module({
   imports: [
@@ -12,10 +13,14 @@ import { RunnerModule } from './runner/runner.module.js';
         if(!config.JUDGE0_URL){
           throw new Error('JUDGE0_URL is missing from environment configuration');
         }
+        if(!config.GEMINI_API_KEY){
+          throw new Error('Gemini API key is missing from the config file');
+        }
         return config;
       },
     }),
     RunnerModule,
+    ChallengesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -1,3 +1,7 @@
+type TestCase = {
+    input: string;
+    expectedOutput: string;
+};
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
@@ -104,6 +108,45 @@ export class RunnerService {
                 result.time == null ? null : Math.round(Number(result.time) * 1000),
             memoryKb:
                 result.memory == null ? null : Number(result.memory),
+        };
+    }
+
+    async runTests(source: string, tests: TestCase[]) {
+        const results = [];
+
+        for (const test of tests) {
+            const testSource = `${source}\n${test.input}`;
+            const execution = await this.runCode(testSource);
+
+            if (execution.outcome !== 'success') {
+                results.push({
+                    passed: false,
+                    expectedOutput: test.expectedOutput,
+                    actualOutput: execution.output,
+                    outcome: execution.outcome,
+                    error: execution.error,
+                });
+
+                continue;
+            }
+
+            const actualOutput = (execution.output ?? '').trim();
+            const expectedOutput = test.expectedOutput.trim();
+            const passed = actualOutput === expectedOutput;
+
+            results.push({
+                passed,
+                expectedOutput: test.expectedOutput,
+                actualOutput,
+                outcome: passed ? 'passed' : 'wrong_answer',
+                error: null,
+            });
+        }
+
+        return {
+            totalTests: tests.length,
+            passedTests: results.filter((result) => result.passed).length,
+            results,
         };
     }
 }
