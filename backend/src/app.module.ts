@@ -4,6 +4,7 @@ import { AppService } from './app.service.js';
 import { ConfigModule } from '@nestjs/config';
 import { RunnerModule } from './runner/runner.module.js';
 import { ChallengesModule } from './challenges/challenges.module.js';
+import { PrismaModule } from './prisma/prisma.module.js';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { ChallengesModule } from './challenges/challenges.module.js';
     }),
     RunnerModule,
     ChallengesModule,
+    PrismaModule,
   ],
   controllers: [AppController],
   providers: [AppService],

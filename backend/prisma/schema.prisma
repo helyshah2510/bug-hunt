@@ -1,0 +1,82 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// DRAFT = passed machine validation, APPROVED = you checked it, REJECTED = not for players
+enum ChallengeStatus {
+  DRAFT
+  APPROVED
+  REJECTED
+}
+
+model User {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  username     String    @unique
+  passwordHash String
+  xp           Int       @default(0)
+  createdAt    DateTime  @default(now())
+  attempts     Attempt[]
+}
+
+model Challenge {
+  id                String          @id @default(uuid())
+  title             String
+  description       String
+  difficulty        String
+  brokenCode        String
+  referenceSolution String // private: never send to players
+  explanation       String
+  status            ChallengeStatus @default(DRAFT)
+  createdAt         DateTime        @default(now())
+  testCases         TestCase[]
+  hints             Hint[]
+  attempts          Attempt[]
+}
+
+model TestCase {
+  id             String    @id @default(uuid())
+  challengeId    String
+  input          String
+  expectedOutput String // private: never send to players
+  order          Int
+  challenge      Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+
+  @@unique([challengeId, order])
+}
+
+model Hint {
+  id          String    @id @default(uuid())
+  challengeId String
+  order       Int
+  text        String
+  challenge   Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+
+  @@unique([challengeId, order])
+}
+
+model Attempt {
+  id            String    @id @default(uuid())
+  userId        String
+  challengeId   String
+  submittedCode String
+  passed        Boolean
+  hintsUsed     Int       @default(0)
+  xpEarned      Int       @default(0)
+  createdAt     DateTime  @default(now())
+  user          User      @relation(fields: [userId], references: [id])
+  challenge     Challenge @relation(fields: [challengeId], references: [id])
+
+  @@index([userId, challengeId])
+}

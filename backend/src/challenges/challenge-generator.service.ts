@@ -64,7 +64,17 @@ export class ChallengeGeneratorService {
         if (!text) {
             throw new Error('Gemini returned an empty response');
         }
-        const challenge = JSON.parse(text);
+
+        let challenge;
+
+        try{
+            challenge=JSON.parse(text);
+        }catch{
+            throw new Error('Gemini didnt return valid JSON');
+        }
+
+        this.assertChallengeShape(challenge);
+
         const validation = await this.validateChallenge(challenge);
 
         return {
@@ -73,15 +83,65 @@ export class ChallengeGeneratorService {
         };
     }
 
+    // Small helper: is this value real text, not empty or just spaces?
+    private isNotEmptyText(value:unknown):boolean{
+        return typeof value==='string'&& value.trim().length>0;
+    }
+    // Gate at the door: checks Gemini's JSON has every field we need.
+    private assertChallengeShape(challenge:any):void{
+        if(
+            typeof challenge!=='object'||
+            challenge===null ||
+            Array.isArray(challenge)
+        ){
+            throw new Error('Generated challenge has a bad shape its not a JSON object');
+        }
+        const problems : string[]=[];
+        const textFields=[
+            'title',
+            'desccription',
+            'difficulty',
+            'brokenCode',
+            'referenceSolution',
+            'explanation',
+        ];
+        for (const field of textFields){
+            if(!this.isNotEmptyText(challenge[field])){
+                problems.push(`${field} is missing or empty`);
+            }
+        }
+
+        if(
+            !Array.isArray(challenge.testInputs)||
+            challenge.hints.length!==3 ||
+            !challenge.hints.every((item:unknown)=>this.isNotEmptyText(item))
+        ){
+            problems.push('hints must be exactly 3');
+        }
+
+        // Cheap fake-bug check: saves 3 Judge0 runs on identical code
+        if(
+            this.isNotEmptyText(challenge.brokenCode) &&
+            this.isNotEmptyText(challenge.referenceSolution) &&
+            challenge.brokenCode.trim()===challenge.referenceSolution.trim()
+        ){
+            problems.push('brokencode and referenceSolution are identical');
+        }
+
+        if(problems.length>0){
+            throw new Error(`Generated challenge has a bad shape: ${problems.join(';')}`);
+        }
+    }
+
     async calculateExpectedOutputs(
-        refrenceSolution: string,
+        referenceSolution: string,
         testInputs: string[],
     ): Promise<string[]> {
         const expectedOutput: string[] = [];
 
         for (const input of testInputs) {
             const result = await this.runnerService.runCode(
-                `${refrenceSolution}\n${input}`,
+                `${referenceSolution}\n${input}`,
             );
             if (result.outcome !== 'success') {
                 throw new Error(
@@ -115,16 +175,10 @@ export class ChallengeGeneratorService {
             testCases,
         );
 
-        console.log(challenge.brokenCode);
-        console.log(challenge.referenceSolution);
-        console.log(challenge.testInputs);
-        console.log(expectedOutput);
-
         const hasWrongAns = brokenResult.results.some(
             (result) => result.outcome === 'wrong_answer',
         );
         if (!hasWrongAns) {
-            console.log('test results ', brokenResult.results);
             throw new Error('Generated challenge has been rejected as it has failed all the test');
         }
 
