@@ -5,6 +5,7 @@ import { ConfigModule } from '@nestjs/config';
 import { RunnerModule } from './runner/runner.module.js';
 import { ChallengesModule } from './challenges/challenges.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
+import { AuthModule } from './auth/auth.module.js';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { PrismaModule } from './prisma/prisma.module.js';
     RunnerModule,
     ChallengesModule,
     PrismaModule,
+    AuthModule,
   ],
   controllers: [AppController],
   providers: [AppService],
