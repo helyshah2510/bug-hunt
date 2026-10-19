@@ -2,6 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { GoogleGenAI } from "@google/genai";
 import { RunnerService } from "../runner/runner.service.js";
+import { PrismaService } from "../prisma/prisma.service.js";
 
 @Injectable()
 export class ChallengeGeneratorService {
@@ -9,6 +10,7 @@ export class ChallengeGeneratorService {
     constructor(
         private readonly configService: ConfigService,
         private readonly runnerService: RunnerService,
+        private readonly prisma: PrismaService,
     ) {
         this.ai = new GoogleGenAI({
             apiKey: this.configService.getOrThrow<string>('GEMINI_API_KEY'),
@@ -67,68 +69,70 @@ export class ChallengeGeneratorService {
 
         let challenge;
 
-        try{
-            challenge=JSON.parse(text);
-        }catch{
+        try {
+            challenge = JSON.parse(text);
+        } catch {
             throw new Error('Gemini didnt return valid JSON');
         }
 
         this.assertChallengeShape(challenge);
 
         const validation = await this.validateChallenge(challenge);
+        const saved = await this.saveChallenge(challenge, validation.expectedOutput);
 
         return {
+            id: saved.id,
             ...challenge,
             ...validation,
         };
     }
 
     // Small helper: is this value real text, not empty or just spaces?
-    private isNotEmptyText(value:unknown):boolean{
-        return typeof value==='string'&& value.trim().length>0;
+    private isNotEmptyText(value: unknown): boolean {
+        return typeof value === 'string' && value.trim().length > 0;
     }
     // Gate at the door: checks Gemini's JSON has every field we need.
-    private assertChallengeShape(challenge:any):void{
-        if(
-            typeof challenge!=='object'||
-            challenge===null ||
+    private assertChallengeShape(challenge: any): void {
+        if (
+            typeof challenge !== 'object' ||
+            challenge === null ||
             Array.isArray(challenge)
-        ){
+        ) {
             throw new Error('Generated challenge has a bad shape its not a JSON object');
         }
-        const problems : string[]=[];
-        const textFields=[
+        const problems: string[] = [];
+        const textFields = [
             'title',
-            'desccription',
+            'description',
             'difficulty',
             'brokenCode',
             'referenceSolution',
             'explanation',
         ];
-        for (const field of textFields){
-            if(!this.isNotEmptyText(challenge[field])){
+        for (const field of textFields) {
+            if (!this.isNotEmptyText(challenge[field])) {
                 problems.push(`${field} is missing or empty`);
             }
         }
 
-        if(
-            !Array.isArray(challenge.testInputs)||
-            challenge.hints.length!==3 ||
-            !challenge.hints.every((item:unknown)=>this.isNotEmptyText(item))
-        ){
+        if (
+            !Array.isArray(challenge.testInputs) ||
+            challenge.hints.length !== 3 ||
+            !challenge.hints.every((item: unknown) => this.isNotEmptyText(item))
+        ) {
             problems.push('hints must be exactly 3');
         }
 
         // Cheap fake-bug check: saves 3 Judge0 runs on identical code
-        if(
+        if (
             this.isNotEmptyText(challenge.brokenCode) &&
             this.isNotEmptyText(challenge.referenceSolution) &&
-            challenge.brokenCode.trim()===challenge.referenceSolution.trim()
-        ){
+            challenge.brokenCode.trim() === challenge.referenceSolution.trim()
+        ) {
             problems.push('brokencode and referenceSolution are identical');
         }
 
-        if(problems.length>0){
+        if (problems.length > 0) {
             throw new Error(`Generated challenge has a bad shape: ${problems.join(';')}`);
         }
     }
@@ -145,7 +149,7 @@ export class ChallengeGeneratorService {
             );
             if (result.outcome !== 'success') {
                 throw new Error(
-                    'he reference solution failed while calculating expected outputs',
+                    'The reference solution failed while calculating expected outputs',
                 );
             }
             expectedOutput.push((result.output ?? '').trim());
@@ -188,5 +192,45 @@ export class ChallengeGeneratorService {
             totalTests: brokenResult.totalTests,
             failedTests: brokenResult.totalTests - brokenResult.passedTests,
         };
+    }
+
+    async saveChallenge(
+        challenge: {
+            title: string;
+            description: string;
+            difficulty: string;
+            brokenCode: string;
+            referenceSolution: string;
+            explanation: string;
+            testInputs: string[];
+            hints: string[];
+            status: 'APPROVED',
+        },
+        expectedOutput: string[],
+    ) {
+        return this.prisma.challenge.create({
+            data: {
+                title: challenge.title,
+                description: challenge.description,
+                difficulty: challenge.difficulty,
+                brokenCode: challenge.brokenCode,
+                referenceSolution: challenge.referenceSolution,
+                explanation: challenge.explanation,
+                // status is left out on purpose: it defaults to DRAFT
+                testCases: {
+                    create: challenge.testInputs.map((input, index) => ({
+                        input,
+                        expectedOutput: expectedOutput[index],
+                        order: index + 1,
+                    })),
+                },
+                hints: {
+                    create: challenge.hints.map((text, index) => ({
+                        text,
+                        order: index + 1,
+                    })),
+                },
+            },
+        });
     }
 }
