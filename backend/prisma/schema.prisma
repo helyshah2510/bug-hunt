@@ -26,29 +26,36 @@ enum Role {
 }
 
 model User {
-  id           String    @id @default(uuid())
-  email        String    @unique
-  username     String    @unique
+  id           String     @id @default(uuid())
+  email        String     @unique
+  username     String     @unique
   passwordHash String
-  role         Role      @default(PLAYER)
-  xp           Int       @default(0)
-  createdAt    DateTime  @default(now())
+  attemptsLeft Int        @default(5)
+  lockedUntil  DateTime?
+  role         Role       @default(PLAYER)
+  xp           Int        @default(3000)
+  createdAt    DateTime   @default(now())
   attempts     Attempt[]
+  progress     Progress[]
 }
 
 model Challenge {
   id                String          @id @default(uuid())
   title             String
   description       String
-  difficulty        String
+  difficulty        Difficulty
   brokenCode        String
   referenceSolution String // private: never send to players
   explanation       String
+  order             Int
   status            ChallengeStatus @default(DRAFT)
   createdAt         DateTime        @default(now())
   testCases         TestCase[]
   hints             Hint[]
   attempts          Attempt[]
+  progress          Progress[]
+
+  @@unique([difficulty, order])
 }
 
 model TestCase {
@@ -85,4 +92,31 @@ model Attempt {
   challenge     Challenge @relation(fields: [challengeId], references: [id])
 
   @@index([userId, challengeId])
+}
+
+enum Difficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum ProgressStatus {
+  IN_PROGRESS
+  SOLVED
+  SKIPPED
+}
+
+model Progress {
+  id          String         @id @default(uuid())
+  userId      String
+  challengeId String
+  status      ProgressStatus @default(IN_PROGRESS)
+  hintsUsed   Int            @default(0)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  challenge Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, challengeId])
 }

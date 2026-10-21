@@ -3,6 +3,14 @@ import { ConfigService } from "@nestjs/config";
 import { GoogleGenAI } from "@google/genai";
 import { RunnerService } from "../runner/runner.service.js";
 import { PrismaService } from "../prisma/prisma.service.js";
+import { Difficulty } from "@prisma/client";
+import type { ChallengeDifficulty } from './challenges.types.js';
+
+const DIFFICULTY_TO_DB: Record<ChallengeDifficulty, Difficulty> = {
+    easy: 'EASY',
+    medium: 'MEDIUM',
+    hard: 'HARD',
+};
 
 @Injectable()
 export class ChallengeGeneratorService {
@@ -115,6 +123,16 @@ export class ChallengeGeneratorService {
             }
         }
 
+        // difficulty must be one of the three, saved in clean lowercase
+        if (this.isNotEmptyText(challenge.difficulty)) {
+            const level = challenge.difficulty.trim().toLowerCase();
+            if (!['easy', 'medium', 'hard'].includes(level)) {
+                problems.push('difficulty must be easy, medium or hard');
+            } else {
+                challenge.difficulty = level;
+            }
+        }
+
         if (
             !Array.isArray(challenge.testInputs) ||
             challenge.hints.length !== 3 ||
@@ -198,7 +216,7 @@ export class ChallengeGeneratorService {
         challenge: {
             title: string;
             description: string;
-            difficulty: string;
+            difficulty: ChallengeDifficulty;
             brokenCode: string;
             referenceSolution: string;
             explanation: string;
@@ -208,29 +226,44 @@ export class ChallengeGeneratorService {
         },
         expectedOutput: string[],
     ) {
-        return this.prisma.challenge.create({
-            data: {
-                title: challenge.title,
-                description: challenge.description,
-                difficulty: challenge.difficulty,
-                brokenCode: challenge.brokenCode,
-                referenceSolution: challenge.referenceSolution,
-                explanation: challenge.explanation,
-                // status is left out on purpose: it defaults to DRAFT
-                testCases: {
-                    create: challenge.testInputs.map((input, index) => ({
-                        input,
-                        expectedOutput: expectedOutput[index],
-                        order: index + 1,
-                    })),
-                },
-                hints: {
-                    create: challenge.hints.map((text, index) => ({
-                        text,
-                        order: index + 1,
-                    })),
-                },
-            },
+        // translate lowercase (Gemini) to uppercase (database)
+        const difficulty = DIFFICULTY_TO_DB[challenge.difficulty];
+
+        // find the next free place in this level
+        const last = await this.prisma.challenge.aggregate({
+            where: { difficulty },
+            _max: { order: true },
         });
+        const nextOrder = (last._max.order ?? 0) + 1;
+
+        if (nextOrder > 10) {
+            throw new Error(`The ${challenge.difficulty} level already has 10 challenges`);
+        }
+
+        return this.prisma.challenge.create({
+        data: {
+            title: challenge.title,
+            description: challenge.description,
+            difficulty,
+            order: nextOrder,
+            status: 'APPROVED', // players only see APPROVED cases
+            brokenCode: challenge.brokenCode,
+            referenceSolution: challenge.referenceSolution,
+            explanation: challenge.explanation,
+            testCases: {
+                create: challenge.testInputs.map((input, index) => ({
+                    input,
+                    expectedOutput: expectedOutput[index],
+                    order: index + 1,
+                })),
+            },
+            hints: {
+                create: challenge.hints.map((text, index) => ({
+                    text,
+                    order: index + 1,
+                })),
+            },
+        },
+    });
     }
 }

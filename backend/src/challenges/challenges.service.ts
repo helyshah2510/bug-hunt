@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from "@nestjs/common";
+import { Injectable, NotFoundException, BadRequestException, HttpException, HttpStatus } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { RunnerService } from "../runner/runner.service.js";
 
@@ -34,47 +34,107 @@ export class ChallengesService {
         return challenge;
     }
 
-    async submit(id: string, code: string) {
-        //reject bad input before sending it to judge0
+    async submit(userId: string, id: string, code: string) {
+        // reject bad input before doing anything else
         if (
             typeof code !== 'string' ||
             code.trim().length === 0 ||
             code.length > 5000
         ) {
-            throw new BadRequestException('code must not be text, not empty, and at most 5000 characters');
+            throw new BadRequestException('code must be text, not empty, and at most 5000 characters');
         }
 
-        //Load the challenge together with its hidden tests
+        // locked players stop here and never reach Judge0
+        let attempts = await this.checkAttempts(userId);
+
         const challenge = await this.prisma.challenge.findFirst({
             where: { id, status: 'APPROVED' },
             include: { testCases: { orderBy: { order: 'asc' } } },
         });
-
         if (challenge === null) {
             throw new NotFoundException('challenge not found');
         }
-
         if (challenge.testCases.length === 0) {
             throw new NotFoundException('this challenge has no tests yet');
         }
 
-        if (challenge.testCases.length === 0) {
-            throw new NotFoundException('This challenge has no tests yet');
-        }
-
-        //keep only the two fields run tests needs
         const tests = challenge.testCases.map((t) => ({
             input: t.input,
             expectedOutput: t.expectedOutput,
         }));
 
-        //run the players code against every test
         const result = await this.runnerService.runTests(code, tests);
+        const passed =
+            result.totalTests > 0 && result.passedTests === result.totalTests;
+
+        // a wrong answer costs one attempt, a correct one costs nothing
+        if (!passed) {
+            attempts = await this.spendAttempt(userId);
+        }
 
         return {
-            passed: result.totalTests > 0 && result.passedTests === result.totalTests,
+            passed,
             passedTests: result.passedTests,
             totalTests: result.totalTests,
+            attemptsLeft: attempts?.attemptsLeft,
+            lockedUntil: attempts?.lockedUntil,
         };
+    }
+
+    private readonly LOCK_MS = 10 * 60 * 1000;
+    private readonly MAX_ATTEMPTS = 5;
+
+    private async checkAttempts(userId: string) {
+        const user = await this.prisma.user.findUnique({
+            where: { id: userId },
+            select: { attemptsLeft: true, lockedUntil: true },
+        });
+        if (!user) {
+            throw new HttpException('User not found', HttpStatus.NOT_FOUND);
+        }
+        const now = new Date();
+        if (user.lockedUntil) {
+            // Still locked: refuse, and say how long is left
+            if (user.lockedUntil > now) {
+                const minutesLeft = Math.ceil(
+                    (user.lockedUntil?.getTime() - now.getTime()) / 60000,
+                );
+                throw new HttpException(
+                    `No attempts left.Try again in ${minutesLeft} minutes(s).`,
+                    HttpStatus.TOO_MANY_REQUESTS,
+                );
+            }
+            //Lock is over: give all 5 back
+            return this.prisma.user.update({
+                where: { id: userId },
+                data: { attemptsLeft: this.MAX_ATTEMPTS, lockedUntil: null },
+                select: { attemptsLeft: true, lockedUntil: true },
+            });
+        }
+        return user;
+    }
+
+    private async spendAttempt(userId: string) {
+        // The database checks "> 0" and subtracts in ONE step
+        await this.prisma.user.updateMany({
+            where: { id: userId, attemptsLeft: { gt: 0 } },
+            data: { attemptsLeft: { decrement: 1 } },
+        });
+        const user = await this.prisma.user.findUnique({
+            where: { id: userId },
+            select: { attemptsLeft: true, lockedUntil: true },
+        });
+        if (!user) {
+            throw new HttpException('User not found', HttpStatus.NOT_FOUND);
+        }
+        // Just hit 0? Start the 10 minute lock
+        if (user && user.attemptsLeft === 0 && !user.lockedUntil) {
+            return this.prisma.user.update({
+                where: { id: userId },
+                data: { lockedUntil: new Date(Date.now() + this.LOCK_MS) },
+                select: { attemptsLeft: true, lockedUntil: true },
+            });
+        }
+        return user;
     }
 }
