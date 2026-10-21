@@ -20,11 +20,17 @@ enum ChallengeStatus {
   REJECTED
 }
 
+enum Role {
+  PLAYER
+  ADMIN
+}
+
 model User {
   id           String    @id @default(uuid())
   email        String    @unique
   username     String    @unique
   passwordHash String
+  role         Role      @default(PLAYER)
   xp           Int       @default(0)
   createdAt    DateTime  @default(now())
   attempts     Attempt[]
