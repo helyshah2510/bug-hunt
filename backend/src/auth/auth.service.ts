@@ -14,7 +14,7 @@ export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
-  ) {}
+  ) { }
 
   async register(dto: RegisterDto) {
     const email = dto.email.trim().toLowerCase();
@@ -49,5 +49,16 @@ export class AuthService {
 
     const accessToken = await this.jwtService.signAsync({ sub: user.id });
     return { accessToken };
+  }
+
+  async me(id: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      select: { id: true, email: true,xp:true },
+    });
+
+    if(user===null){
+      throw new UnauthorizedException('user no longer exist');
+    }
   }
 }
