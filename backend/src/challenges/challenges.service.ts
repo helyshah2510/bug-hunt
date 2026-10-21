@@ -1,6 +1,14 @@
-import { Injectable, NotFoundException, BadRequestException, HttpException, HttpStatus } from "@nestjs/common";
+import { Injectable, NotFoundException, BadRequestException, HttpException, HttpStatus, ForbiddenException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { RunnerService } from "../runner/runner.service.js";
+import { Challenge, Difficulty, ProgressStatus } from "@prisma/client";
+
+
+const PREVIOUS_LEVEL: Record<Difficulty,Difficulty | null>={
+    EASY:null,
+    MEDIUM:'EASY',
+    HARD:'MEDIUM'
+}
 
 @Injectable()
 export class ChallengesService {
@@ -8,6 +16,61 @@ export class ChallengesService {
         private readonly prisma: PrismaService,
         private readonly runnerService: RunnerService
     ) { }
+
+    private findGate(challenge: Pick<Challenge, 'difficulty' | 'order'>)
+    {
+        if(challenge.order>1){
+            return{
+                difficulty:challenge.difficulty,
+                order:challenge.order-1,
+            };
+        }
+        const previousLevel=PREVIOUS_LEVEL[challenge.difficulty];
+
+        if(previousLevel===null){
+            return null;
+        }
+        return{
+            difficulty:previousLevel,
+            order:10,
+        }
+    }
+
+    private async isDone(userId:string,challengeId:string):Promise<boolean>{
+        const progress= await this.prisma.progress.findUnique({
+            where:{userId_challengeId:{userId,challengeId}},
+        });
+        if(!progress){
+            return false;
+        }
+        return([ProgressStatus.SOLVED,ProgressStatus.SKIPPED] as ProgressStatus[]).includes(progress.status);
+    }
+
+    private async assertUnlocked(userId: string, challenge: Pick<Challenge, 'difficulty' | 'order'>): Promise<void>{
+        const gate=this.findGate(challenge);
+        //no gate is open
+        if(!gate){
+            return;
+        }
+
+        //find gate questionin in the database
+        const gateChallenge= await this.prisma.challenge.findUnique({
+            where:{
+                difficulty_order:{difficulty:gate.difficulty, order:gate.order},
+            },
+        });
+
+        //if the question doesnt exist keep the door closed
+        if(!gateChallenge){
+            throw new ForbiddenException('Question is not available yet')
+        }
+
+        //if the player hasnt finished it keep it locked
+        const done=await this.isDone(userId,gateChallenge.id);
+        if(!done){
+            throw new ForbiddenException('finish previous question first');
+        }
+    }
 
     findAll() {
         return this.prisma.challenge.findMany({

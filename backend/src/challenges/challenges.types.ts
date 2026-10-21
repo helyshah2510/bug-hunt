@@ -1,4 +1,4 @@
-export type ChallengeDifficulty='easy'|'medium'|'hard';
+export type ChallengeDifficulty='EASY'|'MEDIUM'|'HARD';
 export type ChallengeStatus='draft'|'validated'|'approved';
 export type TestCase={
     input:string;

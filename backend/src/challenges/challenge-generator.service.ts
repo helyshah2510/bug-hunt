@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { BadRequestException, Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { GoogleGenAI } from "@google/genai";
 import { RunnerService } from "../runner/runner.service.js";
@@ -7,9 +7,9 @@ import { Difficulty } from "@prisma/client";
 import type { ChallengeDifficulty } from './challenges.types.js';
 
 const DIFFICULTY_TO_DB: Record<ChallengeDifficulty, Difficulty> = {
-    easy: 'EASY',
-    medium: 'MEDIUM',
-    hard: 'HARD',
+    EASY: 'EASY',
+    MEDIUM: 'MEDIUM',
+    HARD: 'HARD',
 };
 
 @Injectable()
@@ -25,17 +25,25 @@ export class ChallengeGeneratorService {
         });
     }
 
-    async generateChallenge() {
+    async generateChallenge(difficulty: ChallengeDifficulty) {
+        const dbDifficulty = DIFFICULTY_TO_DB[difficulty];
+        const result = await this.prisma.challenge.aggregate({
+            where: { difficulty: dbDifficulty },
+            _max: { order: true },
+        });
+        if ((result._max.order ?? 0) >= 10) {
+            throw new BadRequestException(`${difficulty} already has 10 challenges`);
+        }
         const response = await this.ai.models.generateContent({
             model: 'gemini-3.5-flash-lite',
-            contents: ` Create one beginner-level Python debugging case for a
+            contents: ` ${difficulty.toLowerCase()}-level Python debugging case for a
             detective-themed game called Bug Hunt.
 
             Return only a JSON object with these fields:
             {
                 "title": "short case title",
                 "description": "the debugging story and task",
-                "difficulty": "easy",
+                "difficulty": "${difficulty}",
                 "brokenCode": "Python code containing a bug",
                 "referenceSolution": "correct Python code",
                 "testInputs": [
@@ -48,6 +56,10 @@ export class ChallengeGeneratorService {
                 ],
                 "explanation": "explain the bug and its fix simply"
             }
+            Difficulty level: ${difficulty}
+            - EASY: one simple mistake in a short function.
+            - MEDIUM: a mistake in a loop or condition that only shows up on an edge case.
+            - HARD: a mistake that needs tracing several steps to find.
 
             Requirements:
                 - Use Python only.
@@ -82,6 +94,7 @@ export class ChallengeGeneratorService {
         } catch {
             throw new Error('Gemini didnt return valid JSON');
         }
+        challenge.difficulty = difficulty;
 
         this.assertChallengeShape(challenge);
 
@@ -123,18 +136,16 @@ export class ChallengeGeneratorService {
             }
         }
 
-        // difficulty must be one of the three, saved in clean lowercase
-        if (this.isNotEmptyText(challenge.difficulty)) {
-            const level = challenge.difficulty.trim().toLowerCase();
-            if (!['easy', 'medium', 'hard'].includes(level)) {
-                problems.push('difficulty must be easy, medium or hard');
-            } else {
-                challenge.difficulty = level;
-            }
+        if (
+            !Array.isArray(challenge.testInputs) ||
+            challenge.testInputs.length < 3 ||
+            !challenge.testInputs.every((item: unknown) => this.isNotEmptyText(item))
+        ) {
+            problems.push('testInputs must have at least 3 items');
         }
 
         if (
-            !Array.isArray(challenge.testInputs) ||
+            !Array.isArray(challenge.hints) ||
             challenge.hints.length !== 3 ||
             !challenge.hints.every((item: unknown) => this.isNotEmptyText(item))
         ) {
@@ -241,29 +252,29 @@ export class ChallengeGeneratorService {
         }
 
         return this.prisma.challenge.create({
-        data: {
-            title: challenge.title,
-            description: challenge.description,
-            difficulty,
-            order: nextOrder,
-            status: 'APPROVED', // players only see APPROVED cases
-            brokenCode: challenge.brokenCode,
-            referenceSolution: challenge.referenceSolution,
-            explanation: challenge.explanation,
-            testCases: {
-                create: challenge.testInputs.map((input, index) => ({
-                    input,
-                    expectedOutput: expectedOutput[index],
-                    order: index + 1,
-                })),
+            data: {
+                title: challenge.title,
+                description: challenge.description,
+                difficulty,
+                order: nextOrder,
+                status: 'APPROVED', // players only see APPROVED cases
+                brokenCode: challenge.brokenCode,
+                referenceSolution: challenge.referenceSolution,
+                explanation: challenge.explanation,
+                testCases: {
+                    create: challenge.testInputs.map((input, index) => ({
+                        input,
+                        expectedOutput: expectedOutput[index],
+                        order: index + 1,
+                    })),
+                },
+                hints: {
+                    create: challenge.hints.map((text, index) => ({
+                        text,
+                        order: index + 1,
+                    })),
+                },
             },
-            hints: {
-                create: challenge.hints.map((text, index) => ({
-                    text,
-                    order: index + 1,
-                })),
-            },
-        },
-    });
+        });
     }
 }
