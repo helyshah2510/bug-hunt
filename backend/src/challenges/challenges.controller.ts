@@ -1,7 +1,7 @@
 import { Controller,Get,Post,Param, Body, UseGuards } from "@nestjs/common";
 import { ChallengeGeneratorService } from "./challenge-generator.service.js";
 import { ChallengesService } from "./challenges.service.js";
-import { ApiTags,ApiResponse,ApiOperation, ApiBearerAuth } from "@nestjs/swagger";
+import { ApiTags, ApiBearerAuth } from "@nestjs/swagger";
 import { SubmitDto } from "./dto/submit.dto.js";
 import { JwtAuthGuard } from "../auth/guard/jwt-auth.guard.js";
 
