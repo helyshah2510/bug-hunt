@@ -1,13 +1,14 @@
-import { Injectable, NotFoundException, BadRequestException, HttpException, HttpStatus, ForbiddenException } from "@nestjs/common";
+import { Injectable, NotFoundException, BadRequestException, HttpException, HttpStatus, ForbiddenException, ConflictException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { RunnerService } from "../runner/runner.service.js";
-import { Challenge, Difficulty, ProgressStatus } from "@prisma/client";
+import { Challenge, Difficulty, Prisma, ProgressStatus } from "@prisma/client";
+import { LEVEL_POINTS } from "./challenges.config.js";
 
 
-const PREVIOUS_LEVEL: Record<Difficulty,Difficulty | null>={
-    EASY:null,
-    MEDIUM:'EASY',
-    HARD:'MEDIUM'
+const PREVIOUS_LEVEL: Record<Difficulty, Difficulty | null> = {
+    EASY: null,
+    MEDIUM: 'EASY',
+    HARD: 'MEDIUM'
 }
 
 @Injectable()
@@ -17,57 +18,56 @@ export class ChallengesService {
         private readonly runnerService: RunnerService
     ) { }
 
-    private findGate(challenge: Pick<Challenge, 'difficulty' | 'order'>)
-    {
-        if(challenge.order>1){
-            return{
-                difficulty:challenge.difficulty,
-                order:challenge.order-1,
+    private findGate(challenge: Pick<Challenge, 'difficulty' | 'order'>) {
+        if (challenge.order > 1) {
+            return {
+                difficulty: challenge.difficulty,
+                order: challenge.order - 1,
             };
         }
-        const previousLevel=PREVIOUS_LEVEL[challenge.difficulty];
+        const previousLevel = PREVIOUS_LEVEL[challenge.difficulty];
 
-        if(previousLevel===null){
+        if (previousLevel === null) {
             return null;
         }
-        return{
-            difficulty:previousLevel,
-            order:10,
+        return {
+            difficulty: previousLevel,
+            order: 10,
         }
     }
 
-    private async isDone(userId:string,challengeId:string):Promise<boolean>{
-        const progress= await this.prisma.progress.findUnique({
-            where:{userId_challengeId:{userId,challengeId}},
+    private async isDone(userId: string, challengeId: string): Promise<boolean> {
+        const progress = await this.prisma.progress.findUnique({
+            where: { userId_challengeId: { userId, challengeId } },
         });
-        if(!progress){
+        if (!progress) {
             return false;
         }
-        return([ProgressStatus.SOLVED,ProgressStatus.SKIPPED] as ProgressStatus[]).includes(progress.status);
+        return ([ProgressStatus.SOLVED, ProgressStatus.SKIPPED] as ProgressStatus[]).includes(progress.status);
     }
 
-    private async assertUnlocked(userId: string, challenge: Pick<Challenge, 'difficulty' | 'order'>): Promise<void>{
-        const gate=this.findGate(challenge);
+    private async assertUnlocked(userId: string, challenge: Pick<Challenge, 'difficulty' | 'order'>): Promise<void> {
+        const gate = this.findGate(challenge);
         //no gate is open
-        if(!gate){
+        if (!gate) {
             return;
         }
 
         //find gate questionin in the database
-        const gateChallenge= await this.prisma.challenge.findUnique({
-            where:{
-                difficulty_order:{difficulty:gate.difficulty, order:gate.order},
+        const gateChallenge = await this.prisma.challenge.findUnique({
+            where: {
+                difficulty_order: { difficulty: gate.difficulty, order: gate.order },
             },
         });
 
         //if the question doesnt exist keep the door closed
-        if(!gateChallenge){
+        if (!gateChallenge) {
             throw new ForbiddenException('Question is not available yet')
         }
 
         //if the player hasnt finished it keep it locked
-        const done=await this.isDone(userId,gateChallenge.id);
-        if(!done){
+        const done = await this.isDone(userId, gateChallenge.id);
+        if (!done) {
             throw new ForbiddenException('finish previous question first');
         }
     }
@@ -79,7 +79,7 @@ export class ChallengesService {
             orderBy: { createdAt: 'desc' },
         });
     }
-    async findOne(userId:string,id: string) {
+    async findOne(userId: string, id: string) {
         const challenge = await this.prisma.challenge.findFirst({
             where: { id, status: 'APPROVED' },
             select: {
@@ -87,7 +87,7 @@ export class ChallengesService {
                 title: true,
                 description: true,
                 difficulty: true,
-                order:true,
+                order: true,
                 brokenCode: true,
                 _count: { select: { hints: true } },
             },
@@ -95,7 +95,7 @@ export class ChallengesService {
         if (challenge === null) {
             throw new NotFoundException('challenge not found');
         }
-        await this.assertUnlocked(userId,challenge);
+        await this.assertUnlocked(userId, challenge);
         return challenge;
     }
 
@@ -122,7 +122,7 @@ export class ChallengesService {
         if (challenge.testCases.length === 0) {
             throw new NotFoundException('this challenge has no tests yet');
         }
-        await this.assertUnlocked(userId,challenge);
+        await this.assertUnlocked(userId, challenge);
 
         const tests = challenge.testCases.map((t) => ({
             input: t.input,
@@ -133,17 +133,21 @@ export class ChallengesService {
         const passed =
             result.totalTests > 0 && result.passedTests === result.totalTests;
 
+        const xpEarned = passed ? await this.recordSolve(userId, challenge, code) : 0;
+
         // a wrong answer costs one attempt, a correct one costs nothing
         if (!passed) {
             attempts = await this.spendAttempt(userId);
         }
 
         return {
+            xpEarned,
             passed,
             passedTests: result.passedTests,
             totalTests: result.totalTests,
             attemptsLeft: attempts?.attemptsLeft,
             lockedUntil: attempts?.lockedUntil,
+            explanation: passed ? challenge.explanation : undefined,
         };
     }
 
@@ -202,5 +206,94 @@ export class ChallengesService {
             });
         }
         return user;
+    }
+
+    private async recordSolve(userId: string, challenge: Challenge, code: string) {
+        return this.prisma.$transaction(async (tx) => {
+            const key = { userId, challengeId: challenge.id };
+            await tx.progress.upsert({ where: { userId_challengeId: key }, create: key, update: {} });
+            const claimed = await tx.progress.updateMany({
+                where: { ...key, status: { not: ProgressStatus.SOLVED } },
+                data: { status: ProgressStatus.SOLVED },
+            });
+            const xpEarned = claimed.count === 1 ? LEVEL_POINTS[challenge.difficulty].solveReward : 0
+
+            if (claimed.count === 1) {
+                await tx.user.update({ where: { id: userId }, data: { xp: { increment: xpEarned } } });
+                await tx.attempt.create({
+                    data: { ...key, submittedCode: code, passed: true, xpEarned },
+                });
+            }
+            return xpEarned;
+        });
+    }
+
+    private async spendXp(tx: Prisma.TransactionClient, userId: string, cost: number) {
+        const result = await tx.user.updateMany({
+            where: { id: userId, xp: { gte: cost } },
+            data: { xp: { decrement: cost } },
+        });
+        if (result.count === 0) {
+            throw new ForbiddenException('Not enough points');
+        }
+    }
+
+    async useHint(userId: string, id: string) {
+        const challenge = await this.prisma.challenge.findFirst({
+            where: { id, status: 'APPROVED' },
+            include: { hints: { orderBy: { order: 'asc' } } },
+        });
+        if (!challenge) {
+            throw new NotFoundException('challenge not found');
+        }
+        await this.assertUnlocked(userId, challenge);
+        return this.prisma.$transaction(async (tx) => {
+            const key = { userId, challengeId: id };
+            const progress = await tx.progress.upsert({
+                where: { userId_challengeId: key },
+                create: key,
+                update: {},
+            });
+            if (progress.status !== "IN_PROGRESS") {
+                throw new BadRequestException('Already finished');
+            }
+            if (progress.hintsUsed >= challenge.hints.length) {
+                throw new BadRequestException('No hints left');
+            }
+            const claimed = await tx.progress.updateMany({
+                where: { ...key, hintsUsed: progress.hintsUsed },
+                data: { hintsUsed: { increment: 1 } },
+            });
+            if (claimed.count === 0) {
+                throw new ConflictException('please try again');
+            }
+            await this.spendXp(tx, userId, LEVEL_POINTS[challenge.difficulty].hintCost);
+
+            return { hint: challenge.hints[progress.hintsUsed].text, hintNumber: progress.hintsUsed + 1 };
+        });
+    }
+
+    async skip(userId: string, id: string) {
+        const challenge = await this.prisma.challenge.findFirst({
+            where: { id, status: 'APPROVED' },
+        });
+        if (!challenge) {
+            throw new NotFoundException('challenge not found');
+        }
+        await this.assertUnlocked(userId, challenge);
+
+        return this.prisma.$transaction(async (tx) => {
+            const key = { userId, challengeId: id };
+            await tx.progress.upsert({ where: { userId_challengeId: key }, create: key, update: {} });
+            const claimed = await tx.progress.updateMany({
+                where: { ...key, status: ProgressStatus.IN_PROGRESS },
+                data: { status: ProgressStatus.SKIPPED },
+            });
+            if (claimed.count === 0) {
+                throw new BadRequestException('Already finished');
+            }
+            await this.spendXp(tx, userId, LEVEL_POINTS[challenge.difficulty].skipCost);
+            return { skipped: true };
+        });
     }
 }

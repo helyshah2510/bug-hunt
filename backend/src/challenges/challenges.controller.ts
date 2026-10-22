@@ -57,4 +57,26 @@ export class ChallengesController {
         }
         return this.challengesService.submit(userId, id, body.code);
     }
+
+    @ApiBearerAuth()
+    @UseGuards(JwtAuthGuard)
+    @Post(':id/hint')
+    hint(@Req() req:AuthenticatedRequest, @Param('id') id:string){
+        const userId=req.user?.sub;
+        if(!userId){
+            throw new UnauthorizedException();
+        }
+        return this.challengesService.useHint(userId,id);
+    }
+
+    @ApiBearerAuth()
+    @UseGuards(JwtAuthGuard)
+    @Post(':id/skip')
+    skip(@Req() req:AuthenticatedRequest, @Param('id') id:string){
+        const userId=req.user?.sub;
+        if(!userId){
+            throw new UnauthorizedException();
+        }
+        return this.challengesService.skip(userId,id);
+    }
 }
