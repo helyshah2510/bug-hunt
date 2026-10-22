@@ -33,8 +33,8 @@ export class RunnerService {
                 body: JSON.stringify({
                     source_code: source,
                     language_id: 113,
-                    cpu_time_limit: 2,
-                    wall_time_limit: 5,
+                    cpu_time_limit: 5,
+                    wall_time_limit: 10,
                     memory_limit: 128000,
                 }),
             },
@@ -50,7 +50,7 @@ export class RunnerService {
             throw new Error('Judge0 did not return a submission token');
         }
 
-        const deadline = Date.now() + 15_000;
+        const deadline = Date.now() + 40_000;
 
         while (Date.now() < deadline) {
             await new Promise((resolve) => setTimeout(resolve, 500));

@@ -35,8 +35,12 @@ export class ChallengesController {
     @ApiBearerAuth()
     @UseGuards(JwtAuthGuard)
     @Get(':id')
-    findOne(@Param('id') id: string) {
-        return this.challengesService.findOne(id);
+    findOne( @Req() req:AuthenticatedRequest,@Param('id') id: string) {
+        const userId=req.user?.sub;
+        if(!userId){
+            throw new UnauthorizedException();
+        }
+        return this.challengesService.findOne(userId,id);
     }
 
     @ApiBearerAuth()

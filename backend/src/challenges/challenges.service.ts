@@ -79,7 +79,7 @@ export class ChallengesService {
             orderBy: { createdAt: 'desc' },
         });
     }
-    async findOne(id: string) {
+    async findOne(userId:string,id: string) {
         const challenge = await this.prisma.challenge.findFirst({
             where: { id, status: 'APPROVED' },
             select: {
@@ -87,6 +87,7 @@ export class ChallengesService {
                 title: true,
                 description: true,
                 difficulty: true,
+                order:true,
                 brokenCode: true,
                 _count: { select: { hints: true } },
             },
@@ -94,6 +95,7 @@ export class ChallengesService {
         if (challenge === null) {
             throw new NotFoundException('challenge not found');
         }
+        await this.assertUnlocked(userId,challenge);
         return challenge;
     }
 
@@ -120,6 +122,7 @@ export class ChallengesService {
         if (challenge.testCases.length === 0) {
             throw new NotFoundException('this challenge has no tests yet');
         }
+        await this.assertUnlocked(userId,challenge);
 
         const tests = challenge.testCases.map((t) => ({
             input: t.input,
