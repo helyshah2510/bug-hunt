@@ -2,7 +2,7 @@ type TestCase = {
     input: string;
     expectedOutput: string;
 };
-import { Injectable } from '@nestjs/common';
+import { Injectable,ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 type RunnerResult = {
@@ -22,8 +22,16 @@ export class RunnerService {
             .replace(/\/+$/, '');
     }
 
-    async runCode(source: string) {
-        const submitResponse = await fetch(
+    
+async runCode(source: string) {
+    const requestTimeoutMs = 8_000;
+    const deadline = Date.now() + 40_000;
+
+    // Step 1: Send the code to Judge0.
+    let submitResponse: Response;
+
+    try {
+        submitResponse = await fetch(
             `${this.judge0Url}/submissions?base64_encoded=false&wait=false`,
             {
                 method: 'POST',
@@ -37,41 +45,79 @@ export class RunnerService {
                     wall_time_limit: 10,
                     memory_limit: 128000,
                 }),
+                signal: AbortSignal.timeout(requestTimeoutMs),
             },
         );
+    } catch {
+        throw new ServiceUnavailableException(
+            'Judge0 is not responding. Please try again shortly.',
+        );
+    }
 
-        if (!submitResponse.ok) {
-            throw new Error(`Judge0 submission failed: ${submitResponse.status}`);
-        }
+    if (!submitResponse.ok) {
+        throw new ServiceUnavailableException(
+            `Judge0 submission failed with status ${submitResponse.status}.`,
+        );
+    }
 
-        const submission = await submitResponse.json();
+    const submission = await submitResponse.json();
 
-        if (!submission.token) {
-            throw new Error('Judge0 did not return a submission token');
-        }
+    if (!submission.token) {
+        throw new ServiceUnavailableException(
+            'Judge0 did not return a submission token.',
+        );
+    }
 
-        const deadline = Date.now() + 40_000;
+    // Step 2: Poll Judge0 until execution finishes.
+    while (Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
 
-        while (Date.now() < deadline) {
-            await new Promise((resolve) => setTimeout(resolve, 500));
+        const remainingMs = deadline - Date.now();
 
+        if (remainingMs <= 0) break;
+
+        try {
             const resultResponse = await fetch(
                 `${this.judge0Url}/submissions/${submission.token}?base64_encoded=false`,
+                {
+                    signal: AbortSignal.timeout(
+                        Math.min(requestTimeoutMs, remainingMs),
+                    ),
+                },
             );
 
+            // Retry temporary server errors.
+            if (resultResponse.status >= 500) {
+                continue;
+            }
+
             if (!resultResponse.ok) {
-                throw new Error(`Judge0 result request failed: ${resultResponse.status}`);
+                throw new ServiceUnavailableException(
+                    `Judge0 result request failed with status ${resultResponse.status}.`,
+                );
             }
 
             const result = await resultResponse.json();
 
-            if (result.status.id > 2) {
+            // Status 1 = In Queue, 2 = Processing.
+            if (result.status?.id > 2) {
                 return this.normalizeResult(result);
             }
-        }
+        } catch (error) {
+            if (error instanceof ServiceUnavailableException) {
+                throw error;
+            }
 
-        throw new Error('Timed out while waiting for the Judge0 result');
+            // A temporary network failure or request timeout.
+            // Continue polling until the overall deadline.
+        }
     }
+
+    throw new ServiceUnavailableException(
+        'Judge0 took too long to respond. Please try again shortly.',
+    );
+}
+
 
     private normalizeResult(result: any): RunnerResult {
         const statusId = result.status?.id;

@@ -120,14 +120,29 @@ export class ChallengesService {
                 difficulty: true,
                 order: true,
                 brokenCode: true,
-                _count: { select: { hints: true } },
+                explanation:true,
+                hints:{orderBy:{order:'asc'},select:{text:true}},
             },
         });
         if (challenge === null) {
             throw new NotFoundException('challenge not found');
         }
         await this.assertUnlocked(userId, challenge);
-        return challenge;
+        const progress=await this.prisma.progress.findUnique({
+            where:{userId_challengeId:{userId,challengeId:id}},
+        });
+        const hintsUsed=progress?.hintsUsed??0;
+        const status=progress?.status??ProgressStatus.IN_PROGRESS;
+        const {hints,explanation,...rest}=challenge;
+        return {
+            ...rest,
+            status,
+            hintsUsed,
+            hintsTotal:hints.length,
+            hints:hints.slice(0,hintsUsed).map((h)=>h.text),
+            explanation:status===ProgressStatus.SOLVED?explanation:undefined,
+            ...LEVEL_POINTS[challenge.difficulty],
+        };
     }
 
     async submit(userId: string, id: string, code: string) {
