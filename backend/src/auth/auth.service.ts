@@ -2,6 +2,7 @@ import {
   Injectable,
   ConflictException,
   UnauthorizedException,
+  NotFoundException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import bcrypt from 'bcryptjs';
@@ -51,14 +52,14 @@ export class AuthService {
     return { accessToken };
   }
 
-  async me(id: string) {
+  async me(userId: string) {
     const user = await this.prisma.user.findUnique({
-      where: { id },
-      select: { id: true, email: true,xp:true },
+      where: { id: userId },
+      select: { id: true, username: true, email: true, xp: true, attemptsLeft: true, lockedUntil: true, role: true },
     });
-
-    if(user===null){
-      throw new UnauthorizedException('user no longer exist');
+    if (!user) {
+      throw new NotFoundException('User not found');
     }
+    return user;
   }
 }

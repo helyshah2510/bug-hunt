@@ -28,8 +28,12 @@ export class ChallengesController {
     @ApiBearerAuth()
     @UseGuards(JwtAuthGuard)
     @Get()
-    findAll() {
-        return this.challengesService.findAll();
+    findAll(@Req() req:AuthenticatedRequest) {
+        const userId=req.user?.sub;
+        if(!userId){
+            throw new UnauthorizedException();
+        }
+        return this.challengesService.findAll(userId);
     }
 
     @ApiBearerAuth()

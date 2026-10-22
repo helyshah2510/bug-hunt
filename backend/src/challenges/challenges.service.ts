@@ -72,13 +72,44 @@ export class ChallengesService {
         }
     }
 
-    findAll() {
-        return this.prisma.challenge.findMany({
-            where: { status: 'APPROVED' },
-            select: { id: true, title: true, difficulty: true },
-            orderBy: { createdAt: 'desc' },
+    async findAll(userId: string) {
+        const [challenges, progress] = await Promise.all([
+            this.prisma.challenge.findMany({
+                where: { status: 'APPROVED' },
+                select: { id: true, title: true, difficulty: true, order: true },
+                orderBy: [{ difficulty: 'asc' }, { order: 'asc' }],
+            }),
+            this.prisma.progress.findMany({
+                where: { userId },
+                select: { challengeId: true, status: true },
+            }),
+        ]);
+
+        const statusById = new Map(progress.map((p) => [p.challengeId, p.status]));
+        const idByPlace = new Map(challenges.map((c) => [`${c.difficulty}:${c.order}`, c.id]));
+        const DONE = [ProgressStatus.SOLVED, ProgressStatus.SKIPPED] as ProgressStatus[];
+
+        return challenges.map((c) => {
+            const own = statusById.get(c.id);
+            if (own && DONE.includes(own)) {
+                return { ...c, state: own };
+            }
+
+            const gate = this.findGate(c);
+            if (!gate) {
+                return { ...c, state: 'OPEN' };
+            }
+
+            const gateId = idByPlace.get(`${gate.difficulty}:${gate.order}`);
+            const gateStatus = gateId ? statusById.get(gateId) : undefined;
+
+            if (gateStatus && DONE.includes(gateStatus)) {
+                return { ...c, state: 'OPEN' };
+            }
+            return { ...c, state: 'LOCKED' };
         });
     }
+
     async findOne(userId: string, id: string) {
         const challenge = await this.prisma.challenge.findFirst({
             where: { id, status: 'APPROVED' },
