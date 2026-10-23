@@ -5,6 +5,7 @@ import { RunnerService } from "../runner/runner.service.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { Difficulty } from "@prisma/client";
 import type { ChallengeDifficulty } from './challenges.types.js';
+import { LEVEL_RULES, TOPICS } from "./challenge-rule.js";
 
 const DIFFICULTY_TO_DB: Record<ChallengeDifficulty, Difficulty> = {
     EASY: 'EASY',
@@ -34,6 +35,18 @@ export class ChallengeGeneratorService {
         if ((result._max.order ?? 0) >= 10) {
             throw new BadRequestException(`${difficulty} already has 10 challenges`);
         }
+        const rules = LEVEL_RULES[dbDifficulty];
+        const bugType = rules.bugTypes[Math.floor(Math.random() * rules.bugTypes.length)];
+        const topic = TOPICS[Math.floor(Math.random() * TOPICS.length)];
+
+        const existing = await this.prisma.challenge.findMany({
+            where: { difficulty: dbDifficulty },
+            select: { title: true, brokenCode: true },
+        });
+
+        const existingTitle = existing.map((c) => c.title).join(',');
+        const existingNames = existing.map((c) => c.brokenCode.match(/def\s+(\W+)/)?.[1]).filter(Boolean).join(',');
+
         const response = await this.ai.models.generateContent({
             model: 'gemini-3.5-flash-lite',
             contents: ` ${difficulty.toLowerCase()}-level Python debugging case for a
@@ -54,22 +67,24 @@ export class ChallengeGeneratorService {
                 "second more specific hint",
                 "third strong hint"
                 ],
-                "explanation": "explain the bug and its fix simply"
+                "explanation": "explain each bug and its fix simply"
             }
             Difficulty level: ${difficulty}
-            - EASY: one simple mistake in a short function.
-            - MEDIUM: a mistake in a loop or condition that only shows up on an edge case.
-            - HARD: a mistake that needs tracing several steps to find.
+            - Number of bugs: ${rules.bugCount}
+            - Main type of mistake: ${bugType}
+            - Code length: about ${rules.lines} lines
+            - ${rules.style}
 
             Requirements:
                 - Use Python only.
-                - The broken code must contain ONE small, specific mistake, such as a wrong
-                operator, a wrong comparison, an off-by-one error, or a wrong index.
+               - The broken code must contain exactly ${rules.bugCount} separate mistake(s).
+                At least one must be of the main type given above. Each mistake must be
+                small and specific.
                 - The broken code must print a DIFFERENT result from the reference solution
                 on at least one test input. Rewriting the same logic in another style
                 (a different loop, renamed variables) is NOT a bug.
-                - The broken code and the reference solution must differ only by that
-                one fix. Keep everything else identical.
+                - The broken code and the reference solution must differ only by those
+                mistakes. Keep everything else identical.
                 - Both versions must use the same function name and the same parameters
                 in the same order.
                 - Include at least 3 test inputs. At least one must expose the bug,
@@ -79,8 +94,15 @@ export class ChallengeGeneratorService {
                 - Do not include expected outputs; our backend will calculate them.
                 - The description must not reveal where the bug is.
                 - Return exactly 3 hints, from subtle to specific. Only the third
-                hint may point at the faulty line.
-                - Do not wrap the JSON in Markdown code fences.`,
+                hint may point at the faulty lines.
+                - Do not wrap the JSON in Markdown code fences.
+                - Do not reuse these titles: ${existingTitle || 'none yet'}
+                - Do not reuse these function names: ${existingNames || 'none yet'}
+                - The brokenCode must be ${rules.lines} lines long (not counting blank lines).
+                - Reach that length with realistic code: several statements, helper variables,
+                  or a small amount of setup. Do not pad it with comments or unused code.
+                `,
+
         });
         const text = response.text;
         if (!text) {
@@ -92,6 +114,8 @@ export class ChallengeGeneratorService {
         try {
             challenge = JSON.parse(text);
         } catch {
+            console.log('[gemini] start:', text.slice(0, 300));
+            console.log('[gemini] start: ', text.slice(-200));
             throw new Error('Gemini didnt return valid JSON');
         }
         challenge.difficulty = difficulty;
@@ -170,20 +194,12 @@ export class ChallengeGeneratorService {
         referenceSolution: string,
         testInputs: string[],
     ): Promise<string[]> {
-        const expectedOutput: string[] = [];
+        const results = await this.runnerService.runBatch(referenceSolution, testInputs);
 
-        for (const input of testInputs) {
-            const result = await this.runnerService.runCode(
-                `${referenceSolution}\n${input}`,
-            );
-            if (result.outcome !== 'success') {
-                throw new Error(
-                    'The reference solution failed while calculating expected outputs',
-                );
-            }
-            expectedOutput.push((result.output ?? '').trim());
+        if (results.some((r) => !r.ok)) {
+            throw new Error('The refrence solution failed while calculating expected outputs');
         }
-        return expectedOutput;
+        return results.map((r) => r.output.trim());
     }
 
     async validateChallenge(challenge: {
@@ -197,29 +213,25 @@ export class ChallengeGeneratorService {
             challenge.testInputs,
         );
 
-        //now run the broke code against the same tests.
-        const testCases = challenge.testInputs.map((input, index) => ({
-            input,
-            expectedOutput: expectedOutput[index],
-        }));
-
-        const brokenResult = await this.runnerService.runTests(
+        //now run the broken code against the same tests, in ONE Judge0 run
+        const brokenResults = await this.runnerService.runBatch(
             challenge.brokenCode,
-            testCases,
+            challenge.testInputs,
         );
 
-        const hasWrongAns = brokenResult.results.some(
-            (result) => result.outcome === 'wrong_answer',
-        );
-        if (!hasWrongAns) {
-            throw new Error('Generated challenge has been rejected as it has failed all the test');
+        const wrongCount = brokenResults.filter(
+            (r, i) => !r.ok || r.output.trim() !== expectedOutput[i],
+        ).length;
+
+        if (wrongCount === 0) {
+            throw new Error('Rejected: broken code never differed from the reference');
         }
 
         return {
             status: 'Validated' as const,
             expectedOutput,
-            totalTests: brokenResult.totalTests,
-            failedTests: brokenResult.totalTests - brokenResult.passedTests,
+            totalTests: challenge.testInputs.length,
+            failedTests: wrongCount,
         };
     }
 

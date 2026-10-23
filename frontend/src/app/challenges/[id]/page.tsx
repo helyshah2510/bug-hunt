@@ -14,12 +14,13 @@ function CaseContent() {
     const [code, setCode] = useState('');
     const [error, setError] = useState('');
     const [output, setOutput] = useState('');
+    const [hasRun, setHasRun] = useState(false);
     const [me, setMe] = useState<Me | null>(null);
     const [message, setMessage] = useState('');
     const [busy, setBusy] = useState(false);
     const [running, setRunning] = useState(false);
 
-    const refreshMe = () => apiFetch<Me>('/auth/me').then(setMe).catch(() => {});
+    const refreshMe = () => apiFetch<Me>('/auth/me').then(setMe).catch(() => { });
 
     useEffect(() => {
         apiFetch<CaseDetail>(`/challenges/${id}`)
@@ -31,12 +32,13 @@ function CaseContent() {
                 if (err instanceof ApiError && err.status === 401) router.push('/login');
                 else setError(err instanceof Error ? err.message : 'Something went wrong');
             });
-        apiFetch<Me>('/auth/me').then(setMe).catch(() => {});
+        apiFetch<Me>('/auth/me').then(setMe).catch(() => { });
     }, [id, router]);
 
     async function handleRun() {
-        if (running) return;
+        if (running || busy) return;
         setRunning(true);
+        setHasRun(false);
         setOutput('Running...');
         try {
             const r = await apiFetch<RunResult>('/runner/run', {
@@ -71,10 +73,13 @@ function CaseContent() {
             body: JSON.stringify({ code }),
         });
         if (r.passed) {
-            setData((d) => d && { ...d, status: 'SOLVED', explanation: r.explanation });
-            setMessage(r.xpEarned > 0 ? `🎉 Solved! +${r.xpEarned} XP` : '🎉 Solved!');
-        } else {
-            setMessage(`❌ ${r.passedTests}/${r.totalTests} tests passed. Attempts left: ${r.attemptsLeft}`);
+            alert(
+                r.xpEarned > 0
+                    ? `🎉 Yay! Case solved! You earned ${r.xpEarned} XP!`
+                    : '🎉 Yay! Case solved!'
+            );
+            router.push('/challenges');
+            return;
         }
     });
 
@@ -145,20 +150,20 @@ function CaseContent() {
                         </div>
 
                         <div className="flex flex-wrap gap-2">
-                            <button onClick={handleRun} disabled={running}
+                            <button onClick={handleRun} disabled={running || busy}
                                 className="rounded bg-gray-200 px-4 py-2 font-bold text-black disabled:opacity-50">
                                 {running ? 'Running...' : '▶ Run (free)'}
                             </button>
-                            <button onClick={handleSubmit} disabled={busy || !open}
+                            <button onClick={handleSubmit} disabled={running || busy || !open || hasRun}
                                 className="rounded bg-[#f5a623] px-4 py-2 font-bold text-black disabled:opacity-50">
                                 Submit (+{data.solveReward})
                             </button>
                             <button onClick={handleHint}
-                                disabled={busy || !open || data.hintsUsed >= data.hintsTotal}
+                                disabled={running || busy || !open || data.hintsUsed >= data.hintsTotal}
                                 className="rounded bg-blue-500 px-4 py-2 font-bold disabled:opacity-50">
                                 💡 Hint (-{data.hintCost})
                             </button>
-                            <button onClick={handleSkip} disabled={busy || !open}
+                            <button onClick={handleSkip} disabled={running || busy || !open}
                                 className="rounded bg-red-600 px-4 py-2 font-bold disabled:opacity-50">
                                 ⏭ Skip (-{data.skipCost})
                             </button>
