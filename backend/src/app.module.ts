@@ -6,6 +6,7 @@ import { RunnerModule } from './runner/runner.module.js';
 import { ChallengesModule } from './challenges/challenges.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
 import { AuthModule } from './auth/auth.module.js';
+import { AdminModule } from './admin/admin.module.js';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { AuthModule } from './auth/auth.module.js';
     ChallengesModule,
     PrismaModule,
     AuthModule,
+    AdminModule,
   ],
   controllers: [AppController],
   providers: [AppService],
