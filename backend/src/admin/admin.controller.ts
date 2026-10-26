@@ -64,4 +64,9 @@ export class AdminController {
       difficulty as Difficulty | undefined, 
     );
   }
+
+  @Get('challenges/:id')
+  findChallenge(@Param('id')id:string){
+    return this.adminService.findChallengeById(id);
+  }
 }

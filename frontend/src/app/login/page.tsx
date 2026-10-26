@@ -10,7 +10,7 @@ export default function LoginPage() {
     const router = useRouter();
     const [email, setEmail] = useState('');
     const [showPassword, setShowPassword] = useState(false);
-    const [password,setPassword]=useState('');
+    const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
 
@@ -25,9 +25,21 @@ export default function LoginPage() {
                 body: JSON.stringify({ email, password }),
             });
             localStorage.setItem('token', data.accessToken);
-            router.push('/challenges');
+            const user = await apiFetch<{ role: 'ADMIN' | 'PLAYER' }>(
+                '/auth/me',
+            );
+            if (user.role === 'ADMIN') {
+                router.push('/admin');
+            } else {
+                router.push('/challenges');
+            }
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Something went wrong');
+            localStorage.removeItem('token');
+            setError(
+                err instanceof Error
+                    ? err.message
+                    : 'Something went wrong',
+            );
         } finally {
             setLoading(false);
         }

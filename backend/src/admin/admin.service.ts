@@ -156,4 +156,17 @@ export class AdminService {
             ],
         });
     }
+    async findChallengeById(id:string){
+        const challenge= await this.prisma.challenge.findUnique({
+            where:{id},
+            include:{
+                hints:{orderBy:{order:'asc'}},
+                testCases:{orderBy:{order:'asc'}},
+            },
+        });
+        if(!challenge){
+            throw new NotFoundException('challenge not found');
+        }
+        return challenge;
+    }
 }
