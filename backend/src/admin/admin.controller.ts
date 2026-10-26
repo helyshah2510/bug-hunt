@@ -1,4 +1,4 @@
-import { Controller, Get, Req, UnauthorizedException, UseGuards } from '@nestjs/common';
+import { Controller, Delete, Get, Req, UnauthorizedException, UseGuards,Param } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guard/jwt-auth.guard.js';
 import { RolesGuard } from '../auth/guard/roles.guard.js';
 import { Roles } from '../auth/decorator/roles.decorator.js';
@@ -9,17 +9,17 @@ import { ApiBearerAuth } from '@nestjs/swagger';
 
 @ApiBearerAuth()
 @Controller('admin')
-@UseGuards(JwtAuthGuard,RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(Role.ADMIN)
 export class AdminController {
-    constructor(private readonly adminService:AdminService){}
+  constructor(private readonly adminService: AdminService) { }
 
-    @Get('dashboard')
-    getDashboardStats(){
-        return this.adminService.getDashboardStats();
-    }
+  @Get('dashboard')
+  getDashboardStats() {
+    return this.adminService.getDashboardStats();
+  }
 
-     @Get('users')
+  @Get('users')
   findAllUsers(@Req() req: AuthenticatedRequest) {
     const userId = req.user?.sub;
 
@@ -28,5 +28,20 @@ export class AdminController {
     }
 
     return this.adminService.findAllUsers(userId);
+  }
+
+  @Delete('users/:id')
+  deleteUser(
+    @Param('id')userId:string,
+    @Req()req:AuthenticatedRequest,
+  ){
+    const currentUserId=req.user?.sub;
+    if(!currentUserId){
+      throw new UnauthorizedException();
+    }
+    return this.adminService.deleteUser(
+      userId,
+      currentUserId,
+    );
   }
 }

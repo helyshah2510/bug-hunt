@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable,NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 
 @Injectable()
@@ -56,5 +56,22 @@ export class AdminService {
                 hard: hardChallenges,
             },
         };
+    }
+
+    async deleteUser(userId:string,currentUserId:string){
+        if(userId===currentUserId){
+            throw new NotFoundException('You can not delete your own account');
+        }
+        const user=await this.prisma.user.findUnique({
+            where:{id:userId},
+            select:{id:true},
+        });
+        if(!user){
+            throw new NotFoundException('User not found');
+        }
+        await this.prisma.user.delete({
+            where:{id:userId},
+        });
+        return{message:'user deleted '};
     }
 }
