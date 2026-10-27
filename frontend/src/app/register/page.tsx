@@ -49,10 +49,24 @@ export default function RegisterPage() {
         }
     }
     return (
-        <main className="flex min-h-screen items-center justify-center bg-cover bg-center p-4"
-            style={{ backgroundImage: "url('/login-bg.png')" }}>
+        <main className="register-scene relative flex min-h-screen items-center justify-center overflow-hidden bg-cover bg-center p-4">
+            {/* Floating dust */}
+
+            <div className="dust-layer" aria-hidden="true">
+                {Array.from({ length: 500 }, (_, i) => (
+                    <span
+                        key={i}
+                        className="dust-particle"
+                        style={{
+                            left: `${(i * 37 + 11) % 100}%`,
+                            top: `${(i * 53 + 7) % 100}%`,
+                            animationDelay: `${(i % 8) * 0.5}s`,
+                        }}
+                    />
+                ))}
+            </div>
             <form onSubmit={handleSubmit}
-                className="w-full max-w-sm space-y-4 rounded-md border-2 border-[#d9c391] bg-[#f4e4bc] p-6 text-[#2b1d0e] shadow-2xl">
+                className="register-dossier relative z-10 w-full max-w-sm space-y-4 rounded-md border-2 border-[#d9c391] bg-[#f4e4bc] p-6 text-[#2b1d0e] shadow-2xl">
                 <div className="text-center">
                     <h1 className="font-serif text-2xl font-extrabold">
                         Every Detective Starts Somewhere.
@@ -62,7 +76,7 @@ export default function RegisterPage() {
 
                 <label className="block text-sm font-semibold">
                     Username
-                    <div className="mt-1 flex items-center gap-2 rounded border border-[#d9c391] bg-[#fbf3dc] px-3">
+                    <div className="register-input mt-1 flex items-center gap-2 rounded border border-[#d9c391] bg-[#fbf3dc] px-3">
                         <Mail size={16} />
                         <input className="w-full bg-transparent py-2 font-normal outline-none" type="text"
                             placeholder="Name Detective" value={username}
@@ -72,7 +86,7 @@ export default function RegisterPage() {
 
                 <label className="block text-sm font-semibold">
                     Email
-                    <div className="mt-1 flex items-center gap-2 rounded border border-[#d9c391] bg-[#fbf3dc] px-3">
+                    <div className="register-input mt-1 flex items-center gap-2 rounded border border-[#d9c391] bg-[#fbf3dc] px-3">
                         <Mail size={16} />
                         <input className="w-full bg-transparent py-2 font-normal outline-none" type="email"
                             placeholder="your@email.com" value={email}
@@ -82,7 +96,7 @@ export default function RegisterPage() {
 
                 <label className="block text-sm font-semibold">
                     Password
-                    <div className="mt-1 flex items-center gap-2 rounded border border-[#d9c391] bg-[#fbf3dc] px-3">
+                    <div className="register-input mt-1 flex items-center gap-2 rounded border border-[#d9c391] bg-[#fbf3dc] px-3">
                         <Lock size={16} />
                         <input className="w-full bg-transparent py-2 font-normal outline-none"
                             type={showPassword ? 'text' : 'password'} placeholder="Enter your password"
@@ -95,7 +109,7 @@ export default function RegisterPage() {
 
                 <label className="block text-sm font-semibold">
                     Confirm Password
-                    <div className="mt-1 flex items-center gap-2 rounded border border-[#d9c391] bg-[#fbf3dc] px-3">
+                    <div className="register-input mt-1 flex items-center gap-2 rounded border border-[#d9c391] bg-[#fbf3dc] px-3">
                         <Lock size={16} />
                         <input className="w-full bg-transparent py-2 font-normal outline-none"
                             type={showPassword ? 'text' : 'password'} placeholder="Enter your password"
@@ -109,12 +123,12 @@ export default function RegisterPage() {
                 {error && <p className="text-sm text-red-700">{error}</p>}
 
                 <button disabled={loading}
-                    className="w-full rounded bg-[#f5a623] p-2 font-bold hover:brightness-95 disabled:opacity-50">
+                    className="register-submit w-full rounded bg-[#f5a623] p-2 font-bold hover:brightness-95 disabled:opacity-50">
                     {loading ? 'Signing in...' : 'Sign In'}
                 </button>
 
                 <p className="text-center text-sm">
-                    already have an account? <Link href="/login" className="font-semibold underline">Sign In</Link>
+                    already have an account? <Link href="/login" className="register-link font-semibold underline">Sign In</Link>
                 </p>
             </form>
         </main>
