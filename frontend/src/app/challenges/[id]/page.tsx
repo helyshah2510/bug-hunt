@@ -78,9 +78,10 @@ function CaseContent() {
                     ? `🎉 Yay! Case solved! You earned ${r.xpEarned} XP!`
                     : '🎉 Yay! Case solved!'
             );
-            router.push('/challenges');
+            router.push('/levels/${data.difficulty}');
             return;
         }
+        alert('❌ Wrong answer. You lost an attempt. Check your code and try again!');
     });
 
     const handleHint = () => act(async () => {
