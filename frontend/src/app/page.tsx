@@ -1,12 +1,39 @@
-
 "use client";
 
+import { useRouter } from "next/navigation";
+import { apiFetch } from "../lib/api";
 import { useState } from "react";
 
 type Scene = "intro" | "transition" | "menu";
 
 export default function Home() {
+  const router = useRouter();
   const [scene, setScene] = useState<Scene>("intro");
+  const [checking, setChecking] = useState(false);
+
+  async function handleStart() {
+    if (checking) return;
+
+    const token = localStorage.getItem("token");
+
+    //no token at all :normal login
+    if (!token) {
+      router.push("/login");
+      return;
+    }
+    setChecking(true);
+    try {
+      // Server decides if the token is still good
+      const user = await apiFetch<{ role: "ADMIN" | "PLAYER" }>("/auth/me");
+      router.push(user.role === "ADMIN" ? "/admin" : "/challenges");
+    } catch {
+      // Token was dead: remove it and explain why
+      localStorage.removeItem("token");
+      router.push("/login?expired=true");
+    } finally {
+      setChecking(false);
+    }
+  }
 
   function advanceScene() {
     if (scene !== "intro") return;
@@ -96,9 +123,9 @@ export default function Home() {
           <p>Your next mystery is waiting to be solved.</p>
 
           <nav className="menu-buttons">
-            <a href="/login" className="menu-button primary">
-              Start Investigating <span>→</span>
-            </a>
+            <button onClick={handleStart} className="menu-button primary" disabled={checking}>
+              {checking ? "Checking..." : "Start Investigating"} <span>→</span>
+            </button>
 
             <a href="/register" className="menu-button secondary">
               Join the Investigation

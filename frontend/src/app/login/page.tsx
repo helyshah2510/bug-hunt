@@ -1,13 +1,16 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter,useSearchParams } from 'next/navigation';
+import { Suspense } from 'react';
 import { apiFetch } from "@/src/lib/api";
 import Link from 'next/link';
 import { Mail, Lock, Eye, EyeOff } from 'lucide-react';
 
-export default function LoginPage() {
+function LoginForm() {
     const router = useRouter();
+    const  searchParams=useSearchParams();
+    const expired=searchParams.get('expired')==='true';
     const [email, setEmail] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [password, setPassword] = useState('');
@@ -98,6 +101,10 @@ export default function LoginPage() {
                     </div>
                 </label>
 
+                {expired && !error && (
+                    <p className="text-sm text-red-700"> Your session has expired. Please login again</p>
+                )}
+
                 {error && <p className="text-sm text-red-700">{error}</p>}
 
                 <button disabled={loading}
@@ -110,5 +117,13 @@ export default function LoginPage() {
                 </p>
             </form>
         </main>
+    );
+}
+
+export default function LoginPage(){
+    return(
+        <Suspense>
+            <LoginForm/>
+        </Suspense>
     );
 }

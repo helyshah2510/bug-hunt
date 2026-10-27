@@ -41,7 +41,7 @@ export default function RegisterPage() {
                 body: JSON.stringify({ email, password }),
             });
             localStorage.setItem('token', data.accessToken);
-            router.push('/challenges');
+            router.push('/story');
         } catch (err) {
             router.push('/login');
         } finally {
