@@ -77,7 +77,7 @@ body {
   transform: translateY(55px) rotate(-2deg);
   opacity: 0;
   animation: file-slide-in 1s cubic-bezier(.2, .75, .25, 1)
-    1.2s forwards;
+    1.4s forwards;
 }
 
 .paperclip {
@@ -266,5 +266,185 @@ body {
     animation: none;
     opacity: 1;
     transform: none;
+  }
+}
+
+.dust-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.dust-particle {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #ffe8b0;
+  opacity: 0;
+  box-shadow: 0 0 6px rgb(255 220 150 / 50%);
+  animation: dust-float 9s ease-in-out infinite;
+}
+
+.case-file {
+  z-index: 1;
+}
+
+.room-caption {
+  z-index: 1;
+}
+
+@keyframes dust-float {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 15px, 0);
+  }
+  25% {
+    opacity: 0.45;
+  }
+  75% {
+    opacity: 0.3;
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(12px, -55px, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dust-particle {
+    animation: none;
+    display: none;
+  }
+}
+
+
+/* The room invites the first click */
+.scene-intro {
+  cursor: pointer;
+}
+
+/* Case file exits to the right */
+.scene-transition .case-file {
+  animation: file-exit 850ms cubic-bezier(.7, 0, .3, 1) forwards;
+  pointer-events: none;
+}
+
+@keyframes file-exit {
+  from {
+    opacity: 1;
+    transform: translateX(0) rotate(-2deg);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateX(120vw) rotate(9deg);
+  }
+}
+
+/* Main menu appears after the file leaves */
+.main-menu {
+  position: relative;
+  z-index: 2;
+  width: min(92%, 760px);
+  padding: 32px 20px;
+  text-align: center;
+  color: #f8e5bf;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  backdrop-filter: none;
+  animation: menu-appear 750ms ease-out both;
+}
+
+.menu-eyebrow {
+  font-family: monospace;
+  font-size: 11px;
+  letter-spacing: 3px;
+  color: #e3bd7c;
+}
+
+.main-menu h1 {
+  margin-top: 22px;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(38px, 6vw, 64px);
+  font-weight: 500;
+  text-shadow: 0 3px 20px rgb(0 0 0 / 70%);
+}
+
+.main-menu > p:not(.menu-eyebrow) {
+  margin-top: 14px;
+  font-size: 17px;
+  color: #fff0d4;
+  text-shadow: 0 2px 10px rgb(0 0 0 / 90%);
+} 
+
+.menu-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 14px;
+  margin-top: 32px;
+}
+
+.menu-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  min-height: 48px;
+  padding: 13px 22px;
+  font-family: Georgia, "Times New Roman", serif;
+  text-decoration: none;
+  transition: transform 180ms ease, background 180ms ease;
+}
+
+.menu-button:hover {
+  transform: translateY(-3px);
+}
+
+.menu-button.primary {
+  color: #fff0d0;
+  background: #713729;
+  border: 1px solid #bd8062;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 25%);
+}
+
+.menu-button.primary:hover {
+  background: #884433;
+}
+
+.menu-button.secondary {
+  color: #fff0d0;
+  background: rgb(28 19 13 / 55%);
+  border: 1px solid #d4b681;
+}
+
+.menu-button.secondary:hover {
+  background: rgb(28 19 13 / 80%);
+}
+
+@keyframes menu-appear {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scene-transition .case-file,
+  .main-menu {
+    animation-duration: 1ms;
+  }
+
+  .menu-button {
+    transition: none;
   }
 }
