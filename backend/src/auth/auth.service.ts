@@ -62,4 +62,17 @@ export class AuthService {
     }
     return user;
   }
+
+  async refresh(userId:string){
+    // make sure the user still exists (a deleted user shouldn't get a new token)
+    const user= await this.prisma.user.findUnique({
+      where:{id:userId},
+      select:{id:true},
+    });
+    if(!user){
+      throw new UnauthorizedException('User no longer exists');
+    }
+    const accessToken=await this.jwtService.signAsync({sub:user.id});
+    return {accessToken};
+  }
 }
