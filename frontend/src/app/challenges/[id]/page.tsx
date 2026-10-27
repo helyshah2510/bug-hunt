@@ -3,9 +3,14 @@
 import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import Editor from '@monaco-editor/react';
 import { apiFetch, ApiError } from '@/src/lib/api';
 import type { CaseDetail, Me, RunResult, SubmitResult } from '@/src/lib/types';
+import dynamic from 'next/dynamic';
+
+const Editor = dynamic(() => import('@monaco-editor/react'), {
+    ssr: false,
+    loading: () => <p className="p-4 text-sm">Loading editor...</p>,
+});
 
 function CaseContent() {
     const router = useRouter();
@@ -78,7 +83,7 @@ function CaseContent() {
                     ? `🎉 Yay! Case solved! You earned ${r.xpEarned} XP!`
                     : '🎉 Yay! Case solved!'
             );
-            router.push('/levels/${data.difficulty}');
+            router.push(`/levels/${data?.difficulty}`);
             return;
         }
         alert('❌ Wrong answer. You lost an attempt. Check your code and try again!');
@@ -145,9 +150,15 @@ function CaseContent() {
 
                     <section className="space-y-3">
                         <div className="overflow-hidden rounded-md border border-gray-600">
-                            <Editor height="380px" language="python" theme="vs-dark" value={code}
+                            <Editor
+                                key={id}
+                                height="380px"
+                                language="python"
+                                theme="vs-dark"
+                                value={code}
                                 onChange={(v) => setCode(v ?? '')}
-                                options={{ fontSize: 14, minimap: { enabled: false }, scrollBeyondLastLine: false }} />
+                                options={{ fontSize: 14, minimap: { enabled: false }, scrollBeyondLastLine: false }}
+                            />
                         </div>
 
                         <div className="flex flex-wrap gap-2">
