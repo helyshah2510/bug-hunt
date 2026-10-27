@@ -24,3 +24,247 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+
+/* Detective's Secret Laboratory */
+
+.detective-room {
+  position: relative;
+  isolation: isolate;
+  min-height: 100svh;
+  width: 100%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 20px;
+  background-color: #21150f;
+  background-image: url("/detective-room.png");
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  animation: room-appear 1.4s ease-out both;
+}
+
+.room-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(
+    90deg,
+    rgb(15 10 7 / 22%),
+    rgb(15 10 7 / 8%) 50%,
+    rgb(15 10 7 / 30%)
+  );
+}
+
+.case-file {
+  position: relative;
+  width: min(100%, 510px);
+  padding: 44px 42px 25px;
+  color: #392719;
+  background:
+    radial-gradient(
+      ellipse at 15% 10%,
+      rgb(255 255 255 / 30%),
+      transparent 50%
+    ),
+    linear-gradient(135deg, #f4dfae, #e8c98d 65%, #d9b879);
+  border: 1px solid #c6a66d;
+  box-shadow:
+    0 28px 65px rgb(0 0 0 / 45%),
+    0 4px 8px rgb(0 0 0 / 20%);
+  transform: translateY(55px) rotate(-2deg);
+  opacity: 0;
+  animation: file-slide-in 1s cubic-bezier(.2, .75, .25, 1)
+    1.2s forwards;
+}
+
+.paperclip {
+  position: absolute;
+  top: -13px;
+  left: 28px;
+  width: 19px;
+  height: 57px;
+  border: 3px solid #a33f2b;
+  border-radius: 12px;
+  transform: rotate(-8deg);
+}
+
+.file-header {
+  text-align: center;
+  border-bottom: 1px dashed rgb(76 49 29 / 45%);
+  padding-bottom: 20px;
+}
+
+.detective-icon {
+  display: block;
+  font-size: 25px;
+  line-height: 1;
+}
+
+.file-header h1 {
+  margin-top: 9px;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(26px, 5vw, 35px);
+  font-weight: 800;
+  letter-spacing: 5px;
+}
+
+.file-header > p {
+  margin-top: 6px;
+  font-family: monospace;
+  font-size: 11px;
+  letter-spacing: 3px;
+}
+
+.file-content {
+  padding-top: 27px;
+}
+
+.file-eyebrow {
+  font-family: monospace;
+  font-size: 10px;
+  letter-spacing: 2px;
+}
+
+.file-content h2 {
+  margin-top: 15px;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(32px, 6vw, 45px);
+  font-style: italic;
+  font-weight: 500;
+  line-height: 1.16;
+}
+
+.red-underline {
+  width: 65%;
+  height: 3px;
+  margin: 17px 0 20px 5px;
+  background: #9b382b;
+  transform: rotate(-4deg);
+}
+
+.classified {
+  display: inline-block;
+  margin-left: 48%;
+  padding: 7px 10px;
+  border: 2px solid #a23d30;
+  color: #a23d30;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  transform: rotate(-9deg);
+}
+
+.mission {
+  margin-top: 25px;
+}
+
+.mission h3 {
+  font-family: monospace;
+  font-size: 13px;
+  letter-spacing: 2px;
+}
+
+.mission p {
+  max-width: 350px;
+  margin-top: 8px;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+.file-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 28px;
+  padding-top: 12px;
+  border-top: 1px dashed rgb(76 49 29 / 45%);
+  font-family: monospace;
+  font-size: 9px;
+  letter-spacing: 2px;
+}
+
+.room-caption {
+  position: absolute;
+  bottom: 22px;
+  left: 24px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: #f5dfb6;
+  font-family: monospace;
+  font-size: 10px;
+  letter-spacing: 2px;
+  opacity: 0;
+  animation: room-caption-appear 0.8s ease 2s forwards;
+}
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #a8b67b;
+  box-shadow: 0 0 9px #a8b67b;
+}
+
+@keyframes room-appear {
+  from {
+    opacity: 0;
+    background-color: #100b08;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes file-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(55px) rotate(-2deg);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) rotate(-2deg);
+  }
+}
+
+@keyframes room-caption-appear {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 0.8;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 480px) {
+  .case-file {
+    padding: 38px 25px 22px;
+  }
+
+  .mission p {
+    font-size: 14px;
+  }
+
+  .room-caption {
+    bottom: 10px;
+    left: 12px;
+    font-size: 8px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .detective-room,
+  .case-file,
+  .room-caption {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}
