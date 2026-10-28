@@ -41,6 +41,7 @@ function LevelContent() {
     if (!loaded) return <p className="p-6">Loading...</p>;
 
     const done = cases.filter((c) => c.state === 'SOLVED' || c.state === 'SKIPPED').length;
+    const slots= Math.max(10,...cases.map((c)=>c.order));
 
     return (
         <main className="min-h-screen bg-cover bg-center p-4 text-white"
@@ -50,11 +51,11 @@ function LevelContent() {
 
                 <h1 className="mt-4 text-center font-serif text-3xl font-extrabold">{level} Cases</h1>
                 <p className="mt-1 text-center text-sm opacity-80">
-                    Complete the cases in order to unlock new ones. {done}/10 done
+                    Complete the cases in order to unlock new ones. {done}/{cases.length} done
                 </p>
 
                 <div className="mt-8 grid grid-cols-5 gap-4">
-                    {Array.from({ length: 10 }, (_, i) => i + 1).map((order) => {
+                    {Array.from({ length: slots }, (_, i) => i + 1).map((order) => {
                         const c = cases.find((x) => x.order === order);
                         const state = c?.state ?? 'LOCKED';
                         const circle = (
