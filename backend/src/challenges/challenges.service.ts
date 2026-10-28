@@ -4,7 +4,6 @@ import { RunnerService } from "../runner/runner.service.js";
 import { Challenge, Difficulty, Prisma, ProgressStatus } from "@prisma/client";
 import { LEVEL_POINTS } from "./challenges.config.js";
 
-
 const PREVIOUS_LEVEL: Record<Difficulty, Difficulty | null> = {
     EASY: null,
     MEDIUM: 'EASY',
@@ -18,7 +17,18 @@ export class ChallengesService {
         private readonly runnerService: RunnerService
     ) { }
 
-    private findGate(challenge: Pick<Challenge, 'difficulty' | 'order'>) {
+    private async lastOrderOf(difficulty: Difficulty): Promise<number | null> {
+        const last = await this.prisma.challenge.findFirst({
+            where: { difficulty, status: 'APPROVED' },
+            orderBy: { order: 'desc' },
+            select: { order: true },
+        });
+        return last?.order ?? null;
+    }
+
+    private findGate(challenge: Pick<Challenge, 'difficulty' | 'order'>,
+        previousLastOrder: number | null,
+    ) {
         if (challenge.order > 1) {
             return {
                 difficulty: challenge.difficulty,
@@ -32,8 +42,8 @@ export class ChallengesService {
         }
         return {
             difficulty: previousLevel,
-            order: 10,
-        }
+            order: previousLastOrder ?? 10,
+        };
     }
 
     private async isDone(userId: string, challengeId: string): Promise<boolean> {
@@ -47,7 +57,11 @@ export class ChallengesService {
     }
 
     private async assertUnlocked(userId: string, challenge: Pick<Challenge, 'difficulty' | 'order'>): Promise<void> {
-        const gate = this.findGate(challenge);
+        const previousLevel = PREVIOUS_LEVEL[challenge.difficulty];
+        const lastOrder = previousLevel && challenge.order === 1
+            ? await this.lastOrderOf(previousLevel)
+            : null;
+        const gate = this.findGate(challenge, lastOrder);
         //no gate is open
         if (!gate) {
             return;
@@ -88,6 +102,13 @@ export class ChallengesService {
         const statusById = new Map(progress.map((p) => [p.challengeId, p.status]));
         const idByPlace = new Map(challenges.map((c) => [`${c.difficulty}:${c.order}`, c.id]));
         const DONE = [ProgressStatus.SOLVED, ProgressStatus.SKIPPED] as ProgressStatus[];
+        const lastOrderByLevel = new Map<Difficulty, number>();
+        for (const c of challenges) {
+            lastOrderByLevel.set(
+                c.difficulty,
+                Math.max(lastOrderByLevel.get(c.difficulty) ?? 0, c.order),
+            );
+        }
 
         return challenges.map((c) => {
             const own = statusById.get(c.id);
@@ -95,7 +116,8 @@ export class ChallengesService {
                 return { ...c, state: own };
             }
 
-            const gate = this.findGate(c);
+            const prev=PREVIOUS_LEVEL[c.difficulty];
+            const gate = this.findGate(c,prev?lastOrderByLevel.get(prev)?? null:null);
             if (!gate) {
                 return { ...c, state: 'OPEN' };
             }
@@ -120,27 +142,27 @@ export class ChallengesService {
                 difficulty: true,
                 order: true,
                 brokenCode: true,
-                explanation:true,
-                hints:{orderBy:{order:'asc'},select:{text:true}},
+                explanation: true,
+                hints: { orderBy: { order: 'asc' }, select: { text: true } },
             },
         });
         if (challenge === null) {
             throw new NotFoundException('challenge not found');
         }
         await this.assertUnlocked(userId, challenge);
-        const progress=await this.prisma.progress.findUnique({
-            where:{userId_challengeId:{userId,challengeId:id}},
+        const progress = await this.prisma.progress.findUnique({
+            where: { userId_challengeId: { userId, challengeId: id } },
         });
-        const hintsUsed=progress?.hintsUsed??0;
-        const status=progress?.status??ProgressStatus.IN_PROGRESS;
-        const {hints,explanation,...rest}=challenge;
+        const hintsUsed = progress?.hintsUsed ?? 0;
+        const status = progress?.status ?? ProgressStatus.IN_PROGRESS;
+        const { hints, explanation, ...rest } = challenge;
         return {
             ...rest,
             status,
             hintsUsed,
-            hintsTotal:hints.length,
-            hints:hints.slice(0,hintsUsed).map((h)=>h.text),
-            explanation:status===ProgressStatus.SOLVED?explanation:undefined,
+            hintsTotal: hints.length,
+            hints: hints.slice(0, hintsUsed).map((h) => h.text),
+            explanation: status === ProgressStatus.SOLVED ? explanation : undefined,
             ...LEVEL_POINTS[challenge.difficulty],
         };
     }

@@ -32,9 +32,13 @@ export class ChallengeGeneratorService {
             where: { difficulty: dbDifficulty },
             _max: { order: true },
         });
-        if ((result._max.order ?? 0) >= 10) {
-            throw new BadRequestException(`${difficulty} already has 10 challenges`);
-        }
+
+        const last =await this.prisma.challenge.findFirst({
+            where:{difficulty},
+            orderBy:{order:'desc'},
+            select:{order:true},
+        });
+        const order=(last?.order??0)+1;
         const rules = LEVEL_RULES[dbDifficulty];
         const bugType = rules.bugTypes[Math.floor(Math.random() * rules.bugTypes.length)];
         const topic = TOPICS[Math.floor(Math.random() * TOPICS.length)];
@@ -259,8 +263,9 @@ export class ChallengeGeneratorService {
         });
         const nextOrder = (last._max.order ?? 0) + 1;
 
-        if (nextOrder > 10) {
-            throw new Error(`The ${challenge.difficulty} level already has 10 challenges`);
+        const MAX_CASES_PER_LEVEL=20;
+        if(nextOrder>MAX_CASES_PER_LEVEL){
+            throw new BadRequestException(`The ${challenge.difficulty} level is full (${MAX_CASES_PER_LEVEL} cases max)`);
         }
 
         return this.prisma.challenge.create({
